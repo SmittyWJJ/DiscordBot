@@ -59,7 +59,7 @@ async def isItTime():
                 await member.remove_roles(role)
                 deleteEntryFromDB(member.name)
         conn.commit()
-        #print to see last check
+        # print to see last check
         print("Last check was: " + now)
 
 # function to insert one entry to track
@@ -124,6 +124,7 @@ async def on_ready():
 
 @bot.group(invoke_without_command=True)
 async def help(ctx):
+    # create and fill embedded message
     em = discord.Embed(
         title="Commands", color=ctx.author.color)
 
@@ -145,26 +146,30 @@ async def help(ctx):
 
 @bot.command(name='nbomben', help='Zeigt eine Liste aller NBomben an.')
 async def listNbombs(ctx, *args):
+    # fetch all entries
     nbombCursor.execute("""
     SELECT *
     FROM nbombs
-    ORDER BY time
     """)
     rows = nbombCursor.fetchall()
 
+    # check if anyone has the nbomb
     if not rows:
         response = "Momentan hat niemand die N-Bombe."
         await ctx.send(response)
         return
     else:
         nbombs = list()
-        for row in rows:
-            nBombUntil = datetime.strptime(row[1], '%x - %H:%M:%S')
-            now = datetime.now()
-            timeLeft = nBombUntil - now
-            nbombs.append([row[0], row[1], timeLeft.days])
-        nbombs.sort(key=lambda x: x[2])
+        # sort the list by time left if there are more than one
+        if len(rows) > 1:
+            for row in rows:
+                nBombUntil = datetime.strptime(row[1], '%x - %H:%M:%S')
+                now = datetime.now()
+                timeLeft = nBombUntil - now
+                nbombs.append([row[0], row[1], timeLeft.days])
+            nbombs.sort(key=lambda x: x[2])
 
+    # fill the field strings to post them afterwards
     name, date, days = "", "", ""
     for person in nbombs:
         name += person[0]+"\n"
@@ -245,8 +250,8 @@ async def giveNbombRole(ctx, *args):
             args[0], time)
         await ctx.send(response)
 
-    #for rows in nbombCursor.execute('SELECT * FROM nbombs'):
-    #print(rows)
+    # for rows in nbombCursor.execute('SELECT * FROM nbombs'):
+    # print(rows)
 
     conn.commit()
 
