@@ -9,6 +9,7 @@ import time
 from datetime import datetime, timedelta
 from discord.ext import commands
 from dotenv import load_dotenv
+from stream_check import *
 
 # from .core import Group, Command
 
