@@ -19,6 +19,7 @@ locale.setlocale(category=locale.LC_ALL,
 # Database
 conn = sqlite3.connect('NBombs.db', check_same_thread=False)
 nbombCursor = conn.cursor()
+lastChecked = datetime.now()
 
 
 # initially creates table
@@ -61,7 +62,8 @@ async def isItTime():
                 deleteEntryFromDB(member.name)
         conn.commit()
         # print to see last check
-        print("Last check was: " + now)
+        lastChecked = now
+        print("Last check was: " + datetime.strftime(now, '%x - %H:%M:%S'))
 
 # function to insert one entry to track
 
@@ -147,6 +149,7 @@ async def help(ctx):
 
 @bot.command(name='nbomben', help='Zeigt eine Liste aller NBomben an.')
 async def listNbombs(ctx, *args):
+    # main()
     # fetch all entries
     nbombCursor.execute("""
     SELECT *
@@ -183,6 +186,8 @@ async def listNbombs(ctx, *args):
     em.add_field(name="Name", value=name)
     em.add_field(name="Übrige Tage", value=days)
     em.add_field(name=f"Genauer Zeitpunkt", value=date)
+    em.set_footer(text="Letzte Prüfung: {}".format(
+        datetime.strftime(lastChecked, '%x - %H:%M:%S')))
     await ctx.send(embed=em)
 
 
