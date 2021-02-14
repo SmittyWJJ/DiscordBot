@@ -39,13 +39,11 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 bot.remove_command("help")
 
 
-# this function is called every hour and checks if its time to remove the nbomb
+# this function is called every 10mins and checks if its time to remove the nbomb
 
 
 async def isItTime():
     while True:
-        # timer which repeats this function every hour
-        await asyncio.sleep(3600)
         # creating cursor
         checkEveryHourCursor = conn.cursor()
         # querying nbombs
@@ -64,6 +62,8 @@ async def isItTime():
         # print to see last check
         lastChecked = now
         print("Last check was: " + datetime.strftime(now, '%x - %H:%M:%S'))
+        # timer which repeats this function every 10 mins
+        await asyncio.sleep(600)
 
 # function to insert one entry to track
 
