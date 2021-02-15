@@ -29,12 +29,16 @@ lastChecked = datetime.now()
 streamCheckStillRunning = False
 
 # initially creates table
-nbombCursor.execute('''CREATE TABLE IF NOT EXISTS nbombs(
-    name text, time timestamp)''')
-nbombCursor.execute('''CREATE TABLE IF NOT EXISTS floStreamSchedule(
-    scheduleTime NUMERIC, takenPlace NUMERIC)''')
-nbombCursor.execute('''CREATE TABLE IF NOT EXISTS floStats(
-    streamsAnnounced INTEGER, takenPlace INTEGER)''')
+nbombCursor.execute("""CREATE TABLE IF NOT EXISTS nbombs(
+    name text, time timestamp)""")
+nbombCursor.execute("""CREATE TABLE IF NOT EXISTS floStreamSchedule(
+    scheduleTime NUMERIC, takenPlace NUMERIC)""")
+nbombCursor.execute("""CREATE TABLE IF NOT EXISTS floStats(
+    streamsAnnounced INTEGER, takenPlace INTEGER)""")
+
+# initially creates one entry for floStats which later get incremented
+nbombCursor.execute(
+    """INSERT INTO floStats (streamsAnnounced, takenPlace) SELECT 0, 0 WHERE NOT EXISTS (SELECT * FROM floStats)""")
 
 # loading environmental variables
 load_dotenv()
@@ -96,6 +100,16 @@ async def checkStreamLive():
                                             SET takenPlace = 1
                                             WHERE scheduleTime = ?
                                             """, [stream[0]])
+
+                # increasing takenPlace for every stream that happened
+                checkStreamCursor.execute("""
+                                            UPDATE floStats
+                                            SET takenPlace = takenPlace + 1
+                                            WHERE EXISTS(
+                                                SELECT * 
+                                                FROM floStats
+                                                )
+                                            """)
             else:
                 # set takenPlace to 2 if stream offline so that we dont select an insane amount of streams if there are like 1000 cancelled streams
                 checkStreamCursor.execute("""
@@ -103,6 +117,7 @@ async def checkStreamLive():
                                             SET takenPlace = 2
                                             WHERE scheduleTime = ?
                                             """, [stream[0]])
+
             break
     # close cursor and set boolean to false
     conn.commit()
@@ -141,6 +156,17 @@ async def checkSchedule():
     # if there are no new streams just return
     if not streams:
         return
+
+    # increasing the amount by the number of new streams
+    checkScheduleCursor.execute("""
+                                UPDATE floStats
+                                SET streamsAnnounced = streamsAnnounced + ?
+                                WHERE EXISTS(
+                                    SELECT * 
+                                    FROM floStats
+                                    )
+                                """, str(len(streams)))
+
     # a correct insert needs to look like this at the end
     # VALUES ("17.02.2021 - 17:00:00", 0), ...
     # while the last comma needs to be removed
@@ -215,7 +241,7 @@ async def isItTime():
 
 def insertIntoDB(time, member):
     # inserts an entry if that name does'nt exists yet
-    nbombCursor.execute('''
+    nbombCursor.execute("""
                                       INSERT INTO nbombs
                                       (name, time)
                                         SELECT
@@ -226,27 +252,27 @@ def insertIntoDB(time, member):
                                             FROM nbombs
                                             WHERE name = ?
                                         )
-                  ''', (member, time, member))
+                  """, (member, time, member))
 
 # update the db by days given
 
 
 def updateDB(time, member):
-    nbombCursor.execute('''
+    nbombCursor.execute("""
                         UPDATE nbombs
                         SET time = ?
                         WHERE name = ?
-                        ''', (time, member))
+                        """, (time, member))
 # check if the roles on the server and the entries on the db are consistent
 
 # delete entry from db
 
 
 def deleteEntryFromDB(member):
-    nbombCursor.execute('''
+    nbombCursor.execute("""
                         DELETE FROM nbombs
                         WHERE name = ?
-    ''', [member])
+    """, [member])
 
 # not sure how costly this is to performance could be left out
 
@@ -376,11 +402,11 @@ async def giveNbombRole(ctx, *args):
     timeToAssign = now.strftime("%x - %H:%M:%S")
 
     # check if name is already in db and save to cursor
-    nbombCursor.execute('''
+    nbombCursor.execute("""
            SELECT *
            FROM nbombs
            WHERE name = ?
-       ''', [userToAssignNbomb.name])
+       """, [userToAssignNbomb.name])
     rows = nbombCursor.fetchall()
 
     # if nothing was found then make new entry
