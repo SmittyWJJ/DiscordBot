@@ -5,6 +5,7 @@ import locale
 import threading
 import asyncio
 import time
+import twitch
 
 from dateutil import tz
 from datetime import datetime, timedelta
@@ -14,15 +15,18 @@ from stream_check import getSchedule
 
 # from .core import Group, Command
 
-#windows: German
-#Linux: de_DE.utf8
+# Windows: German
+# Linux: de_DE.utf8
 locale.setlocale(category=locale.LC_ALL,
                  locale="de_DE.utf8")
 
 # Database
 conn = sqlite3.connect('NBombs.db', check_same_thread=False)
 nbombCursor = conn.cursor()
+
+# global variables
 lastChecked = datetime.now()
+streamCheckStillRunning = False
 
 # initially creates table
 nbombCursor.execute('''CREATE TABLE IF NOT EXISTS nbombs(
@@ -36,6 +40,8 @@ nbombCursor.execute('''CREATE TABLE IF NOT EXISTS floStats(
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 GUILD = os.getenv('DISCORD_GUILD')
+TWITCH_CLIENT_ID = os.getenv("TWITCH_CLIENT_ID")
+TWITCH_CLIENT_SECRET = os.getenv("TWITCH_CLIENT_SECRET")
 
 # intents to get more permissions, in this cases to see all members, has to be enabled in the developer Portal aswell
 intents = discord.Intents().all()
@@ -45,8 +51,69 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 bot.remove_command("help")
 
 
-# checks the public google calendar for the next 10 upcoming events in this case flo streams
+# checks if Rheyces stream is online 15 min after it was schedule to be online
+# if its online takenPlace is set to 1 otherwise to 2
+
+
+async def checkStreamLive():
+    # set boolean to true as this function starts waiting
+    global streamCheckStillRunning
+    streamCheckStillRunning = True
+
+    # new cursor and select all streams
+    checkStreamCursor = conn.cursor()
+    checkStreamCursor.execute("""
+                        SELECT *
+                        FROM floStreamSchedule
+                        WHERE takenPlace = 0
+                        """)
+    rows = checkStreamCursor.fetchall()
+
+    now = datetime.now()
+    # iterate over all streams and look if any of them should be live now
+    for stream in rows:
+        # checking if we are less than 15minutes away and then wait until we are 15min after stream start
+        # should always work if we check every 10 min in isItTime() and 15 min in here
+
+        # this would just check if we happen to be between 15 min and 30 min after stream start
+        # minutes_diff = now - datetime.strptime(stream[0], "%x - %H:%M:%S")).total_seconds() / 60.0
+        # if minutes_diff >= 15.0 and minutes_diff < 30.0:
+
+        minutes_diff = (now - (datetime.strptime(
+            stream[0], "%x - %H:%M:%S"))).total_seconds() / 60.0
+
+        if minutes_diff < 15.0 and minutes_diff > 0.0:
+            # wait until 15min after
+            await asyncio.sleep(int((15 - minutes_diff) * 60))
+            # twitch api check if Rheyces live
+            helix = twitch.Helix(TWITCH_CLIENT_ID, TWITCH_CLIENT_SECRET)
+            # this twitch query takes a good 2 seconds
+            if helix.user("B0aty").is_live:
+                # should be able to use the same cursor here if we break at the end anyway
+                # set takenPlace to 1 if stream online
+                checkStreamCursor.execute("""
+                                            UPDATE floStreamSchedule
+                                            SET takenPlace = 1
+                                            WHERE scheduleTime = ?
+                                            """, [stream[0]])
+            else:
+                # set takenPlace to 2 if stream offline so that we dont select an insane amount of streams if there are like 1000 cancelled streams
+                checkStreamCursor.execute("""
+                                            UPDATE floStreamSchedule
+                                            SET takenPlace = 2
+                                            WHERE scheduleTime = ?
+                                            """, [stream[0]])
+            break
+    # close cursor and set boolean to false
+    conn.commit()
+    checkStreamCursor.close()
+    streamCheckStillRunning = False
+
+# checks the public google calendar for the next 10 upcoming events in this case Rheyces streams
+
+
 async def checkSchedule():
+    checkScheduleCursor = conn.cursor()
     streams = list()
     events = getSchedule()
     if not events:
@@ -60,15 +127,14 @@ async def checkSchedule():
         streams.append(scheduleTimeLocal)
 
     # check if the stream is already in there otherwise it gets added over and over again
-    nbombCursor.execute("""
-                        SELECT scheduleTime 
-                        FROM floStreamSchedule 
+    checkScheduleCursor.execute("""
+                        SELECT scheduleTime
+                        FROM floStreamSchedule
                         """)
-    rows = nbombCursor.fetchall()
+    rows = checkScheduleCursor.fetchall()
 
     for streamInRows in rows:
         for streamInList in streams:
-            print(streamInList)
             if streamInRows[0] == streamInList:
                 streams.remove(streamInList)
 
@@ -87,17 +153,18 @@ async def checkSchedule():
     # that needs to be removed
     # string[0:10] cuts the string
     queryString = """
-                    INSERT INTO floStreamSchedule 
-                    (scheduleTime, takenPlace) 
-                    VALUES 
+                    INSERT INTO floStreamSchedule
+                    (scheduleTime, takenPlace)
+                    VALUES
                     """ \
                     + stringEntry[0:len(stringEntry)-1]
 
-    print(queryString)
     # execute query
-    nbombCursor.execute(queryString)
+    checkScheduleCursor.execute(queryString)
     # commit
     conn.commit()
+
+    checkScheduleCursor.close()
 
     # print(start, event['summary'])
 
@@ -107,10 +174,10 @@ async def checkSchedule():
 
 async def checkNbombs():
     # creating cursor
-    checkEveryHourCursor = conn.cursor()
+    checkNBombCursor = conn.cursor()
     # querying nbombs
-    checkEveryHourCursor.execute('SELECT * FROM nbombs')
-    rows = checkEveryHourCursor.fetchall()
+    checkNBombCursor.execute('SELECT * FROM nbombs')
+    rows = checkNBombCursor.fetchall()
     # getting time and guild
     now = datetime.now()
     guild = discord.utils.get(bot.guilds, name=GUILD)
@@ -121,7 +188,7 @@ async def checkNbombs():
             await member.remove_roles(role)
             deleteEntryFromDB(member.name)
     conn.commit()
-    checkEveryHourCursor.close()
+    checkNBombCursor.close()
     # print to see last check
     global lastChecked
     lastChecked = now
@@ -132,8 +199,14 @@ async def checkNbombs():
 
 async def isItTime():
     while True:
+        # check if nbombs need to be removed
         await checkNbombs()
+        # check for new entry in Rheyces stream schedule
         await checkSchedule()
+        # check if a stream is live, if the function is not already waiting
+        # because this function starts running 15 min after stream start but gets called every 10 min
+        if not streamCheckStillRunning:
+            await checkStreamLive()
         # timer which repeats this function every 10 mins
         await asyncio.sleep(600)
 
@@ -210,7 +283,7 @@ async def help(ctx):
 
     em.add_field(name="Commands", value="""
         !help
-        !nbombe [@Person] [Tage] 
+        !nbombe [@Person] [Tage]
         !nbomben""")
     em.add_field(
         name="Syntax", value="""
@@ -226,13 +299,14 @@ async def help(ctx):
 
 @bot.command(name='nbomben', help='Zeigt eine Liste aller NBomben an.')
 async def listNbombs(ctx, *args):
+    listNbombCursor = conn.cursor()
     # main()
     # fetch all entries
-    nbombCursor.execute("""
+    listNbombCursor.execute("""
     SELECT *
     FROM nbombs
     """)
-    rows = nbombCursor.fetchall()
+    rows = listNbombCursor.fetchall()
 
     # check if anyone has the nbomb
     if not rows:
@@ -266,6 +340,7 @@ async def listNbombs(ctx, *args):
     em.set_footer(text="Letzte Prüfung: {}".format(
         datetime.strftime(lastChecked, '%x - %H:%M:%S')))
     await ctx.send(embed=em)
+    listNbombCursor.close()
 
 
 # assign nbomb
