@@ -92,7 +92,7 @@ async def checkStreamLive():
             # twitch api check if Rheyces live
             helix = twitch.Helix(TWITCH_CLIENT_ID, TWITCH_CLIENT_SECRET)
             # this twitch query takes a good 2 seconds
-            if helix.user("B0aty").is_live:
+            if helix.user("Rheyces").is_live:
                 # should be able to use the same cursor here if we break at the end anyway
                 # set takenPlace to 1 if stream online
                 checkStreamCursor.execute("""
