@@ -25,6 +25,10 @@ lastChecked = datetime.now()
 # initially creates table
 nbombCursor.execute('''CREATE TABLE IF NOT EXISTS nbombs(
     name text, time timestamp)''')
+nbombCursor.execute('''CREATE TABLE IF NOT EXISTS floStreamSchedule(
+    scheduleTime NUMERIC, takenPlace NUMERIC)''')
+nbombCursor.execute('''CREATE TABLE IF NOT EXISTS floStats(
+    streamsAnnounced INTEGER, takenPlace INTEGER)''')
 
 # loading environmental variables
 load_dotenv()
@@ -39,29 +43,45 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 bot.remove_command("help")
 
 
-# this function is called every 10mins and checks if its time to remove the nbomb
+async def checkSchedule():
+    events = getSchedule()
+    if not events:
+        print('No upcoming events found.')
+    for event in events:
+        start = event['start'].get('dateTime', event['start'].get('date'))
+        print(start, event['summary'])
+
+
+# checks if its time to remove the nbomb
+
+
+async def checkNbombs():
+    # creating cursor
+    checkEveryHourCursor = conn.cursor()
+    # querying nbombs
+    checkEveryHourCursor.execute('SELECT * FROM nbombs')
+    rows = checkEveryHourCursor.fetchall()
+    # getting time and guild
+    now = datetime.now()
+    guild = discord.utils.get(bot.guilds, name=GUILD)
+    role = discord.utils.get(guild.roles, name="🆖💣")
+    for a in rows:
+        if datetime.strptime(a[1], "%x - %H:%M:%S") < now:
+            member = discord.utils.get(guild.members, name=a[0])
+            await member.remove_roles(role)
+            deleteEntryFromDB(member.name)
+    conn.commit()
+    # print to see last check
+    lastChecked = now
+    print("Last check was: " + datetime.strftime(now, '%x - %H:%M:%S'))
+
+# this function is called every 10mins
 
 
 async def isItTime():
     while True:
-        # creating cursor
-        checkEveryHourCursor = conn.cursor()
-        # querying nbombs
-        checkEveryHourCursor.execute('SELECT * FROM nbombs')
-        rows = checkEveryHourCursor.fetchall()
-        # getting time and guild
-        now = datetime.now()
-        guild = discord.utils.get(bot.guilds, name=GUILD)
-        role = discord.utils.get(guild.roles, name="🆖💣")
-        for a in rows:
-            if datetime.strptime(a[1], "%x - %H:%M:%S") < now:
-                member = discord.utils.get(guild.members, name=a[0])
-                await member.remove_roles(role)
-                deleteEntryFromDB(member.name)
-        conn.commit()
-        # print to see last check
-        lastChecked = now
-        print("Last check was: " + datetime.strftime(now, '%x - %H:%M:%S'))
+        checkNbombs()
+        checkSchedule()
         # timer which repeats this function every 10 mins
         await asyncio.sleep(600)
 
@@ -111,6 +131,11 @@ def checkIfNBombIsAlreadyAssigned(guild, nbomb):
     rows = nbombCursor.fetchall()
     for element in rows:
         member = discord.utils.get(guild.members, name=element[0])
+        if not member:
+            if guild.name == "Server von Dschanner":
+                return
+            deleteEntryFromDB(element[0])
+            continue
         role = discord.utils.get(member.roles, name=nbomb.name)
         if role == None:
             deleteEntryFromDB(member.name)
@@ -121,6 +146,7 @@ def checkIfNBombIsAlreadyAssigned(guild, nbomb):
 @bot.event
 async def on_ready():
     await isItTime()
+
 
 # help command
 
