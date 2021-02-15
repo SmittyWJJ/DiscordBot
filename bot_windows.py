@@ -14,6 +14,8 @@ from stream_check import getSchedule
 
 # from .core import Group, Command
 
+#windows: German
+#Linux: de_DE.utf8
 locale.setlocale(category=locale.LC_ALL,
                  locale="German")
 
@@ -21,7 +23,6 @@ locale.setlocale(category=locale.LC_ALL,
 conn = sqlite3.connect('NBombs.db', check_same_thread=False)
 nbombCursor = conn.cursor()
 lastChecked = datetime.now()
-
 
 # initially creates table
 nbombCursor.execute('''CREATE TABLE IF NOT EXISTS nbombs(
@@ -44,16 +45,59 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 bot.remove_command("help")
 
 
+# checks the public google calendar for the next 10 upcoming events in this case flo streams
 async def checkSchedule():
     streams = list()
     events = getSchedule()
     if not events:
-        print('No upcoming events found.')
+        # no need to print, just spams the console
+        # print('No upcoming events found.')
+        return
     for event in events:
         start = event['start'].get('dateTime', event['start'].get('date'))
         scheduleTime = datetime.strptime(start, "%Y-%m-%dT%H:%M:%S%z")
         scheduleTimeLocal = datetime.strftime(scheduleTime, "%x - %H:%M:%S")
         streams.append(scheduleTimeLocal)
+
+    # check if the stream is already in there otherwise it gets added over and over again
+    nbombCursor.execute("""
+                        SELECT scheduleTime 
+                        FROM floStreamSchedule 
+                        """)
+    rows = nbombCursor.fetchall()
+
+    for streamInRows in rows:
+        for streamInList in streams:
+            print(streamInList)
+            if streamInRows[0] == streamInList:
+                streams.remove(streamInList)
+
+    # if there are no new streams just return
+    if not streams:
+        return
+    # a correct insert needs to look like this at the end
+    # VALUES ("17.02.2021 - 17:00:00", 0), ...
+    # while the last comma needs to be removed
+    # stringEntry gets filled with all the streams and a 0 for not takenPlace yet
+    stringEntry = ""
+    for stream in streams:
+        stringEntry += "(\"" + stream + "\", 0),"
+
+    # queryString is prepared and the string entry gets added except the last symbol which is the comma
+    # that needs to be removed
+    # string[0:10] cuts the string
+    queryString = """
+                    INSERT INTO floStreamSchedule 
+                    (scheduleTime, takenPlace) 
+                    VALUES 
+                    """ \
+                    + stringEntry[0:len(stringEntry)-1]
+
+    print(queryString)
+    # execute query
+    nbombCursor.execute(queryString)
+    # commit
+    conn.commit()
 
     # print(start, event['summary'])
 
