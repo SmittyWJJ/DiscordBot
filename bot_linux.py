@@ -6,10 +6,11 @@ import threading
 import asyncio
 import time
 
+from dateutil import tz
 from datetime import datetime, timedelta
 from discord.ext import commands
 from dotenv import load_dotenv
-from stream_check import *
+from stream_check import getSchedule
 
 # from .core import Group, Command
 
@@ -44,12 +45,17 @@ bot.remove_command("help")
 
 
 async def checkSchedule():
+    streams = list()
     events = getSchedule()
     if not events:
         print('No upcoming events found.')
     for event in events:
         start = event['start'].get('dateTime', event['start'].get('date'))
-        print(start, event['summary'])
+        scheduleTime = datetime.strptime(start, "%Y-%m-%dT%H:%M:%S%z")
+        scheduleTimeLocal = datetime.strftime(scheduleTime, "%x - %H:%M:%S")
+        streams.append(scheduleTimeLocal)
+
+    # print(start, event['summary'])
 
 
 # checks if its time to remove the nbomb
@@ -71,7 +77,9 @@ async def checkNbombs():
             await member.remove_roles(role)
             deleteEntryFromDB(member.name)
     conn.commit()
+    checkEveryHourCursor.close()
     # print to see last check
+    global lastChecked
     lastChecked = now
     print("Last check was: " + datetime.strftime(now, '%x - %H:%M:%S'))
 
@@ -80,8 +88,8 @@ async def checkNbombs():
 
 async def isItTime():
     while True:
-        checkNbombs()
-        checkSchedule()
+        await checkNbombs()
+        await checkSchedule()
         # timer which repeats this function every 10 mins
         await asyncio.sleep(600)
 
@@ -146,7 +154,6 @@ def checkIfNBombIsAlreadyAssigned(guild, nbomb):
 @bot.event
 async def on_ready():
     await isItTime()
-
 
 # help command
 

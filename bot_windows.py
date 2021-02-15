@@ -10,7 +10,7 @@ from dateutil import tz
 from datetime import datetime, timedelta
 from discord.ext import commands
 from dotenv import load_dotenv
-from stream_check import *
+from stream_check import getSchedule
 
 # from .core import Group, Command
 
@@ -77,7 +77,9 @@ async def checkNbombs():
             await member.remove_roles(role)
             deleteEntryFromDB(member.name)
     conn.commit()
+    checkEveryHourCursor.close()
     # print to see last check
+    global lastChecked
     lastChecked = now
     print("Last check was: " + datetime.strftime(now, '%x - %H:%M:%S'))
 
@@ -152,7 +154,6 @@ def checkIfNBombIsAlreadyAssigned(guild, nbomb):
 @bot.event
 async def on_ready():
     await isItTime()
-
 
 # help command
 
