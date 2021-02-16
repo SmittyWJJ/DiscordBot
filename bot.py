@@ -351,51 +351,51 @@ async def help(ctx):
 # lists stats from Rheyces Stream
 
 
-@bot.command(name='flostats', help='')
-async def listStreamStats(ctx, *args):
-    # channel check
-    print(type(246235677983899663))
-    if ctx.channel.id != PRIMARY_CHANNEL and ctx.channel.id != SECONDARY_CHANNEL:
-        return
-    # new cursor and select stats
-    listStreamStatsCursor = conn.cursor()
-    # number of streams that have ever been announced
-    listStreamStatsCursor.execute("""
-                                    SELECT count(*)
-                                    FROM floStreamSchedule
-                                    """)
-    allAnnounced = listStreamStatsCursor.fetchall()[0][0]
+# @bot.command(name='flostats', help='')
+# async def listStreamStats(ctx, *args):
+#     # channel check
+#     print(type(246235677983899663))
+#     if ctx.channel.id != PRIMARY_CHANNEL and ctx.channel.id != SECONDARY_CHANNEL:
+#         return
+#     # new cursor and select stats
+#     listStreamStatsCursor = conn.cursor()
+#     # number of streams that have ever been announced
+#     listStreamStatsCursor.execute("""
+#                                     SELECT count(*)
+#                                     FROM floStreamSchedule
+#                                     """)
+#     allAnnounced = listStreamStatsCursor.fetchall()[0][0]
 
-    # number of streams that have actually taken place
-    listStreamStatsCursor.execute("""
-                                    SELECT count(*)
-                                    FROM floStreamSchedule
-                                    WHERE takenPlace = 1
-                                    """)
-    takenPlace = listStreamStatsCursor.fetchall()[0][0]
+#     # number of streams that have actually taken place
+#     listStreamStatsCursor.execute("""
+#                                     SELECT count(*)
+#                                     FROM floStreamSchedule
+#                                     WHERE takenPlace = 1
+#                                     """)
+#     takenPlace = listStreamStatsCursor.fetchall()[0][0]
 
-    # number of streams that have been canceled
-    listStreamStatsCursor.execute("""
-                                    SELECT count(*)
-                                    FROM floStreamSchedule
-                                    WHERE takenPlace = 2
-                                    """)
-    cancelled = listStreamStatsCursor.fetchall()[0][0]
+#     # number of streams that have been canceled
+#     listStreamStatsCursor.execute("""
+#                                     SELECT count(*)
+#                                     FROM floStreamSchedule
+#                                     WHERE takenPlace = 2
+#                                     """)
+#     cancelled = listStreamStatsCursor.fetchall()[0][0]
 
-    # stats
-    onlinePercentage = takenPlace / allAnnounced
+#     # stats
+#     onlinePercentage = takenPlace / allAnnounced
 
-    em = discord.Embed(
-        title="Stream Stats", color=ctx.author.color)
-    # RheycesPog
-    em.set_thumbnail(
-        url="https://static-cdn.jtvnw.net/emoticons/v1/302447893/3.0")
-    em.add_field(name="Angekündigte Streams", value=str(allAnnounced))
-    em.add_field(name="Stattgefundene Streams", value=str(takenPlace))
-    em.add_field(name=f"Prozent", value=str(onlinePercentage) + "%")
-    em.set_footer(text="Letzte Prüfung: {}".format(
-        datetime.strftime(lastChecked, '%x - %H:%M:%S')))
-    await ctx.send(embed=em)
+#     em = discord.Embed(
+#         title="Stream Stats", color=ctx.author.color)
+#     # RheycesPog
+#     em.set_thumbnail(
+#         url="https://static-cdn.jtvnw.net/emoticons/v1/302447893/3.0")
+#     em.add_field(name="Angekündigte Streams", value=str(allAnnounced))
+#     em.add_field(name="Stattgefundene Streams", value=str(takenPlace))
+#     em.add_field(name=f"Prozent", value=str(onlinePercentage) + "%")
+#     em.set_footer(text="Letzte Prüfung: {}".format(
+#         datetime.strftime(lastChecked, '%x - %H:%M:%S')))
+    # await ctx.send(embed=em)
 
 
 # list all active nbombs
