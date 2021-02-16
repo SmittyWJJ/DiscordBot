@@ -46,7 +46,7 @@ nbombCursor.execute("""CREATE TABLE IF NOT EXISTS floStreamSchedule(
 # loading environmental variables
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
-GUILD = os.getenv('DISCORD_GUILD_TEST')
+GUILD = os.getenv('DISCORD_GUILD')
 GUILD_TEST = os.getenv("DISCORD_GUILD_TEST")
 TWITCH_CLIENT_ID = os.getenv("TWITCH_CLIENT_ID")
 TWITCH_CLIENT_SECRET = os.getenv("TWITCH_CLIENT_SECRET")
@@ -194,7 +194,6 @@ async def checkSchedule():
         endStreams.append(scheduledEndLocal)
 
         # insert the stream if the exact same stream doesn't exist
-        stringEntry = ""
         for (start, end) in zip(startStreams, endStreams):
             checkScheduleCursor.execute("""
                                 INSERT INTO floStreamSchedule
