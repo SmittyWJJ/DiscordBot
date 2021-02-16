@@ -7,6 +7,7 @@ import asyncio
 import time
 import twitch
 import platform
+import itertools
 
 from dateutil import tz
 from datetime import datetime, timedelta
@@ -22,23 +23,35 @@ conn = sqlite3.connect('NBombs.db', check_same_thread=False)
 nbombCursor = conn.cursor()
 
 # initially creates table
+# name                  -   Name of the user
+# time                  -   Time string
 nbombCursor.execute("""CREATE TABLE IF NOT EXISTS nbombs(
     name text, time timestamp)""")
+# scheduledStartTime    -   Time where the stream was supposed to start
+# scheduledEndTime      -   Time where the stream was supposed to end
+# takenPlace            -   Was the stream live 15 min after the start or 15 min before the end?
+#                               0 -> announced
+#                               1 -> taken place 15 min after start time
+#                               2 -> has not taken place 15 min after start time
+# startedLate           -   Was the stream offline 15 min after the start but online 15 min before the end?
+#                       -       0 -> no
+#                       -       1 -> yes
+# endedEarly            -   Was the stream online 15 min after the start but offline 15 min before the end?
+#                       -       0 -> no
+#                       -       1 -> yes
 nbombCursor.execute("""CREATE TABLE IF NOT EXISTS floStreamSchedule(
-    scheduleTime NUMERIC, takenPlace NUMERIC)""")
-nbombCursor.execute("""CREATE TABLE IF NOT EXISTS floStats(
-    streamsAnnounced INTEGER, takenPlace INTEGER)""")
+    scheduledStartTime NUMERIC, scheduledEndTime NUMERIC, takenPlace NUMERIC, startedLate NUMERIC, endedEarly NUMERIC)""")
 
-# initially creates one entry for floStats which later get incremented
-nbombCursor.execute(
-    """INSERT INTO floStats (streamsAnnounced, takenPlace) SELECT 0, 0 WHERE NOT EXISTS (SELECT * FROM floStats)""")
 
 # loading environmental variables
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
-GUILD = os.getenv('DISCORD_GUILD')
+GUILD = os.getenv('DISCORD_GUILD_TEST')
+GUILD_TEST = os.getenv("DISCORD_GUILD_TEST")
 TWITCH_CLIENT_ID = os.getenv("TWITCH_CLIENT_ID")
 TWITCH_CLIENT_SECRET = os.getenv("TWITCH_CLIENT_SECRET")
+PRIMARY_CHANNEL = int(os.getenv("PRIMARY_CHANNEL"))
+SECONDARY_CHANNEL = int(os.getenv("SECONDARY_CHANNEL"))
 
 # intents to get more permissions, in this cases to see all members, has to be enabled in the developer Portal aswell
 intents = discord.Intents().all()
@@ -74,58 +87,81 @@ async def checkStreamLive():
     # new cursor and select all streams
     checkStreamCursor = conn.cursor()
     checkStreamCursor.execute("""
-                        SELECT *
+                        SELECT scheduledStartTime, scheduledEndTime, takenPlace
                         FROM floStreamSchedule
-                        WHERE takenPlace = 0
+                        WHERE startedLate IS NULL
+                        OR endedEarly IS NULL
                         """)
     rows = checkStreamCursor.fetchall()
 
     now = datetime.now()
     # iterate over all streams and look if any of them should be live now
     for stream in rows:
-        # checking if we are less than 15minutes away and then wait until we are 15min after stream start
-        # should always work if we check every 10 min in isItTime() and 15 min in here
+        # checking if we are less than 15 minutes away
+        # then wait until we are 15min behind the supposed stream start and check if the stream is running
+        if stream[0]:
+            minutes_diff = (now - (datetime.strptime(
+                stream[0], "%x - %H:%M:%S"))).total_seconds() / 60.0
 
-        # this would just check if we happen to be between 15 min and 30 min after stream start
-        # minutes_diff = now - datetime.strptime(stream[0], "%x - %H:%M:%S")).total_seconds() / 60.0
-        # if minutes_diff >= 15.0 and minutes_diff < 30.0:
+            if minutes_diff < 15.0 and minutes_diff > 0.0:
+                # wait until 15min after stream start
+                await asyncio.sleep(int((15 - minutes_diff) * 60))
+                # twitch api check if Rheyces live
+                helix = twitch.Helix(TWITCH_CLIENT_ID, TWITCH_CLIENT_SECRET)
+                if helix.user("Rheyces").is_live:
+                    # set the tags according to what we know so far
+                    checkStreamCursor.execute("""
+                                                UPDATE floStreamSchedule
+                                                SET takenPlace = 1, startedLate = 0
+                                                WHERE scheduledStartTime = ?
+                                                """, [stream[0]])
+                else:
+                    # set takenPlace to 2 if stream offline
+                    checkStreamCursor.execute("""
+                                                UPDATE floStreamSchedule
+                                                SET takenPlace = 2, startedLate = 0
+                                                WHERE scheduledStartTime = ?
+                                                """, [stream[0]])
+                break
+        # checking if we are less than 30 and more than 15 minutes away from the stream end
+        # then wait until exactly 15 min to check if stream is still running
+        if stream[1]:
+            minutes_diff = ((datetime.strptime(
+                stream[0], "%x - %H:%M:%S")) - now).total_seconds() / 60.0
 
-        minutes_diff = (now - (datetime.strptime(
-            stream[0], "%x - %H:%M:%S"))).total_seconds() / 60.0
-
-        if minutes_diff < 15.0 and minutes_diff > 0.0:
-            # wait until 15min after
-            await asyncio.sleep(int((15 - minutes_diff) * 60))
-            # twitch api check if Rheyces live
-            helix = twitch.Helix(TWITCH_CLIENT_ID, TWITCH_CLIENT_SECRET)
-            # this twitch query takes a good 2 seconds
-            if helix.user("Rheyces").is_live:
-                # should be able to use the same cursor here if we break at the end anyway
-                # set takenPlace to 1 if stream online
-                checkStreamCursor.execute("""
-                                            UPDATE floStreamSchedule
-                                            SET takenPlace = 1
-                                            WHERE scheduleTime = ?
-                                            """, [stream[0]])
-
-                # increasing takenPlace for every stream that happened
-                checkStreamCursor.execute("""
-                                            UPDATE floStats
-                                            SET takenPlace = takenPlace + 1
-                                            WHERE EXISTS(
-                                                SELECT * 
-                                                FROM floStats
-                                                )
-                                            """)
-            else:
-                # set takenPlace to 2 if stream offline so that we dont select an insane amount of streams if there are like 1000 cancelled streams
-                checkStreamCursor.execute("""
-                                            UPDATE floStreamSchedule
-                                            SET takenPlace = 2
-                                            WHERE scheduleTime = ?
-                                            """, [stream[0]])
-
-            break
+            if minutes_diff < 30.0 and minutes_diff > 15.0:
+                # wait until 15min before stream end
+                await asyncio.sleep(int((minutes_diff-15) * 60))
+                # twitch api check if Rheyces live
+                helix = twitch.Helix(TWITCH_CLIENT_ID, TWITCH_CLIENT_SECRET)
+                if helix.user("Rheyces").is_live:
+                    # set the tags according to the knowledge earned in the end
+                    if stream[2] == 2:
+                        checkStreamCursor.execute("""
+                                                UPDATE floStreamSchedule
+                                                SET takenPlace = 1, startedLate = 1, endedEarly = 0
+                                                WHERE scheduledEndtTime = ?
+                                                """, [stream[1]])
+                    else:
+                        checkStreamCursor.execute("""
+                                                UPDATE floStreamSchedule
+                                                SET takenPlace = 1, startedLate = 0, endedEarly = 0
+                                                WHERE scheduledEndtTime = ?
+                                                """, [stream[1]])
+                else:
+                    if stream[2] == 1:
+                        checkStreamCursor.execute("""
+                                                UPDATE floStreamSchedule
+                                                SET endedEarly = 1
+                                                WHERE scheduledEndtTime = ?
+                                                """, [stream[1]])
+                    else:
+                        checkStreamCursor.execute("""
+                                                UPDATE floStreamSchedule
+                                                SET endedEarly = 0
+                                                WHERE scheduledEndtTime = ?
+                                                """, [stream[1]])
+                break
     # close cursor and set boolean to false
     conn.commit()
     checkStreamCursor.close()
@@ -136,70 +172,46 @@ async def checkStreamLive():
 
 async def checkSchedule():
     checkScheduleCursor = conn.cursor()
-    streams = list()
+    startStreams = list()
+    endStreams = list()
     events = getSchedule()
+
+    # return if there are no scheduled events
     if not events:
-        # no need to print, just spams the console
-        # print('No upcoming events found.')
         return
+    # get every event start and end time
     for event in events:
         start = event['start'].get('dateTime', event['start'].get('date'))
-        scheduleTime = datetime.strptime(start, "%Y-%m-%dT%H:%M:%S%z")
-        scheduleTimeLocal = datetime.strftime(scheduleTime, "%x - %H:%M:%S")
-        streams.append(scheduleTimeLocal)
+        end = event['end'].get('dateTime', event['end'].get('date'))
+        # convert both time formats
+        scheduledStart = datetime.strptime(start, "%Y-%m-%dT%H:%M:%S%z")
+        scheduledStartLocal = datetime.strftime(
+            scheduledStart, "%x - %H:%M:%S")
+        startStreams.append(scheduledStartLocal)
+        scheduledEnd = datetime.strptime(end, "%Y-%m-%dT%H:%M:%S%z")
+        scheduledEndLocal = datetime.strftime(
+            scheduledEnd, "%x - %H:%M:%S")
+        endStreams.append(scheduledEndLocal)
 
-    # check if the stream is already in there otherwise it gets added over and over again
-    checkScheduleCursor.execute("""
-                        SELECT scheduleTime
-                        FROM floStreamSchedule
-                        """)
-    rows = checkScheduleCursor.fetchall()
-
-    for streamInRows in rows:
-        for streamInList in streams:
-            if streamInRows[0] == streamInList:
-                streams.remove(streamInList)
-
-    # if there are no new streams just return
-    if not streams:
-        return
-
-    # increasing the amount by the number of new streams
-    checkScheduleCursor.execute("""
-                                UPDATE floStats
-                                SET streamsAnnounced = streamsAnnounced + ?
-                                WHERE EXISTS(
-                                    SELECT * 
-                                    FROM floStats
+        # insert the stream if the exact same stream doesn't exist
+        stringEntry = ""
+        for (start, end) in zip(startStreams, endStreams):
+            checkScheduleCursor.execute("""
+                                INSERT INTO floStreamSchedule
+                                (scheduledStartTime, scheduledEndTime, takenPlace)
+                                    SELECT ?, ?, 0
+                                    WHERE NOT EXISTS(
+                                        SELECT *
+                                        FROM floStreamSchedule
+                                        WHERE scheduledStartTime = ?
+                                        AND scheduledEndTime = ?
                                     )
-                                """, str(len(streams)))
+                                """, (start, end, start, end))
 
-    # a correct insert needs to look like this at the end
-    # VALUES ("17.02.2021 - 17:00:00", 0), ...
-    # while the last comma needs to be removed
-    # stringEntry gets filled with all the streams and a 0 for not takenPlace yet
-    stringEntry = ""
-    for stream in streams:
-        stringEntry += "(\"" + stream + "\", 0),"
-
-    # queryString is prepared and the string entry gets added except the last symbol which is the comma
-    # that needs to be removed
-    # string[0:10] cuts the string
-    queryString = """
-                    INSERT INTO floStreamSchedule
-                    (scheduleTime, takenPlace)
-                    VALUES
-                    """ \
-                    + stringEntry[0:len(stringEntry)-1]
-
-    # execute query
-    checkScheduleCursor.execute(queryString)
     # commit
     conn.commit()
 
     checkScheduleCursor.close()
-
-    # print(start, event['summary'])
 
 
 # checks if its time to remove the nbomb
@@ -219,9 +231,9 @@ async def checkNbombs():
             member = discord.utils.get(guild.members, name=a[0])
             await member.remove_roles(role)
             # send message in #kuschelkrabbe
-            channel = discord.utils.get(guild.channels, id=246235677983899663)
+            channel = discord.utils.get(guild.channels, id=PRIMARY_CHANNEL)
             await channel.send(
-                content="<@!{}> wurde die N-Bombe weggenommen.".format(member.id))
+                content="<@!{}> wurde die N-Bombe abgenommen. <:FeelsOkayMan:811338559394676758>".format(member.id))
             deleteEntryFromDB(member.name)
     conn.commit()
     checkNBombCursor.close()
@@ -250,13 +262,12 @@ async def isItTime():
 
 
 def insertIntoDB(time, member):
-    # inserts an entry if that name does'nt exists yet
+    # inserts an entry if that name doesn't exists yet
     nbombCursor.execute("""
                                       INSERT INTO nbombs
                                       (name, time)
                                         SELECT
-                                        ?,
-                                        ?
+                                        ?, ?
                                         WHERE NOT EXISTS(
                                             SELECT name
                                             FROM nbombs
@@ -293,7 +304,7 @@ def checkIfNBombIsAlreadyAssigned(guild, nbomb):
     for element in rows:
         member = discord.utils.get(guild.members, name=element[0])
         if not member:
-            if guild.name == "Server von Dschanner":
+            if guild.name == GUILD_TEST:
                 return
             deleteEntryFromDB(element[0])
             continue
@@ -317,7 +328,7 @@ async def on_ready():
 @bot.group(invoke_without_command=True)
 async def help(ctx):
     # channel check
-    if ctx.channel.id != 246235677983899663 and ctx.channel.id != 809741690054508565:
+    if ctx.channel.id != PRIMARY_CHANNEL and ctx.channel.id != SECONDARY_CHANNEL:
         return
 
     # create and fill embedded message
@@ -344,28 +355,43 @@ async def help(ctx):
 @bot.command(name='flostats', help='')
 async def listStreamStats(ctx, *args):
     # channel check
-    if ctx.channel.id != 246235677983899663 and ctx.channel.id != 809741690054508565:
+    print(type(246235677983899663))
+    if ctx.channel.id != PRIMARY_CHANNEL and ctx.channel.id != SECONDARY_CHANNEL:
         return
     # new cursor and select stats
     listStreamStatsCursor = conn.cursor()
+    # number of streams that have ever been announced
     listStreamStatsCursor.execute("""
-                                    SELECT *
-                                    FROM floStats
+                                    SELECT count(*)
+                                    FROM floStreamSchedule
                                     """)
-    # can only be one row
-    rows = listStreamStatsCursor.fetchall()
+    allAnnounced = listStreamStatsCursor.fetchall()[0][0]
+
+    # number of streams that have actually taken place
+    listStreamStatsCursor.execute("""
+                                    SELECT count(*)
+                                    FROM floStreamSchedule
+                                    WHERE takenPlace = 1
+                                    """)
+    takenPlace = listStreamStatsCursor.fetchall()[0][0]
+
+    # number of streams that have been canceled
+    listStreamStatsCursor.execute("""
+                                    SELECT count(*)
+                                    FROM floStreamSchedule
+                                    WHERE takenPlace = 2
+                                    """)
+    cancelled = listStreamStatsCursor.fetchall()[0][0]
 
     # stats
-    streamsAnnounced = rows[0][0]
-    takenPlace = rows[0][1]
-    onlinePercentage = takenPlace / streamsAnnounced
+    onlinePercentage = takenPlace / allAnnounced
 
     em = discord.Embed(
         title="Stream Stats", color=ctx.author.color)
     # RheycesPog
     em.set_thumbnail(
         url="https://static-cdn.jtvnw.net/emoticons/v1/302447893/3.0")
-    em.add_field(name="Angekündigte Streams", value=str(streamsAnnounced))
+    em.add_field(name="Angekündigte Streams", value=str(allAnnounced))
     em.add_field(name="Stattgefundene Streams", value=str(takenPlace))
     em.add_field(name=f"Prozent", value=str(onlinePercentage) + "%")
     em.set_footer(text="Letzte Prüfung: {}".format(
@@ -376,10 +402,10 @@ async def listStreamStats(ctx, *args):
 # list all active nbombs
 
 
-@bot.command(name='nbomben', help='Zeigt eine Liste aller NBomben an.')
+@bot.command(name='nbomben', help='Zeigt eine Liste aller N-Bomben an.')
 async def listNbombs(ctx, *args):
     # channel check
-    if ctx.channel.id != 246235677983899663 and ctx.channel.id != 809741690054508565:
+    if ctx.channel.id != PRIMARY_CHANNEL and ctx.channel.id != SECONDARY_CHANNEL:
         return
 
     listNbombCursor = conn.cursor()
@@ -404,21 +430,27 @@ async def listNbombs(ctx, *args):
                 nBombUntil = datetime.strptime(row[1], '%x - %H:%M:%S')
                 now = datetime.now()
                 timeLeft = nBombUntil - now
-                nbombs.append([row[0], row[1], timeLeft.days])
-            nbombs.sort(key=lambda x: x[2])
+                hoursLeft = timeLeft.seconds/3600
+                nbombs.append(
+                    [row[0], row[1], timeLeft.days, int(hoursLeft), int((hoursLeft-int(hoursLeft))*60)])
+            nbombs.sort(key=lambda person: (person[2], person[0]))
 
     # fill the field strings to post them afterwards
-    name, date, days = "", "", ""
+    name, date, time = "", "", ""
     for person in nbombs:
         name += person[0]+"\n"
         date += person[1]+"\n"
-        days += str(person[2])+"\n"
+        if person[2] != 0:
+            time += str(person[2]) + "d " + str(person[3]
+                                                ) + "h " + str(person[4]) + "min\n"
+        else:
+            time += str(person[3]) + "h " + str(person[4]) + "min\n"
     em = discord.Embed(
         title="N-Bomben", color=ctx.author.color)
     em.set_thumbnail(
         url="https://cdn160.picsart.com/upscale-253053797003212.png")
     em.add_field(name="Name", value=name)
-    em.add_field(name="Übrige Tage", value=days)
+    em.add_field(name="Übrige Zeit", value=time)
     em.add_field(name=f"Genauer Zeitpunkt", value=date)
     em.set_footer(text="Letzte Prüfung: {}".format(
         datetime.strftime(lastChecked, '%x - %H:%M:%S')))
@@ -429,10 +461,10 @@ async def listNbombs(ctx, *args):
 # assign nbomb
 
 
-@bot.command(name='nbombe', help='[Name] [Tage] weist dieser Person [Tage] die NBombe zu.')
+@bot.command(name='nbombe', help='[Name] [Tage] weist dieser Person [Tage] die N-Bombe zu.')
 async def giveNbombRole(ctx, *args):
     # channel check
-    if ctx.channel.id != 246235677983899663 and ctx.channel.id != 809741690054508565:
+    if ctx.channel.id != PRIMARY_CHANNEL and ctx.channel.id != SECONDARY_CHANNEL:
         return
 
     # check if correct amount of args were used
@@ -479,7 +511,7 @@ async def giveNbombRole(ctx, *args):
         await userToAssignNbomb.add_roles(role)
 
         # sending response to assigning role
-        response = '{} wurde bis zum {} die NBombe zugewiesen.'.format(
+        response = '{} wurde bis zum {} die N-Bombe zugewiesen.'.format(
             args[0], timeToAssign)
         await ctx.send(response)
     else:
@@ -490,7 +522,7 @@ async def giveNbombRole(ctx, *args):
         time = datetime.strftime(time, '%x - %H:%M:%S')
         updateDB(time, userToAssignNbomb.name)
         # sending response to assigning role
-        response = 'Die NBombe von {} wurde bis zum {} verlängert <:x0r6ztGiggle4:785884713306816562>'.format(
+        response = 'Die N-Bombe von {} wurde bis zum {} verlängert. <:x0r6ztGiggle4:785884713306816562>'.format(
             args[0], time)
         await ctx.send(response)
 
