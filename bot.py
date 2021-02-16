@@ -6,6 +6,7 @@ import threading
 import asyncio
 import time
 import twitch
+import platform
 
 from dateutil import tz
 from datetime import datetime, timedelta
@@ -15,10 +16,6 @@ from stream_check import getSchedule
 
 # from .core import Group, Command
 
-# Windows: German
-# Linux: de_DE.utf8
-locale.setlocale(category=locale.LC_ALL,
-                 locale="German")
 
 # Database
 conn = sqlite3.connect('NBombs.db', check_same_thread=False)
@@ -54,6 +51,16 @@ bot.remove_command("help")
 lastChecked = datetime.now()
 streamCheckStillRunning = False
 guild = None
+systemOS = platform.system()
+
+# probably breaks if neither windows nor linux is used but at that point the whole bot is probably dead
+if systemOS == "Windows":
+    locale.setlocale(category=locale.LC_ALL,
+                     locale="German")
+else:
+    locale.setlocale(category=locale.LC_ALL,
+                     locale="de_DE.utf8")
+
 
 # checks if Rheyces stream is online 15 min after it was schedule to be online
 # if its online takenPlace is set to 1 otherwise to 2
@@ -299,6 +306,7 @@ def checkIfNBombIsAlreadyAssigned(guild, nbomb):
 
 @bot.event
 async def on_ready():
+    # getting the guild for global use
     global guild
     guild = discord.utils.get(bot.guilds, name=GUILD)
     await isItTime()
@@ -329,6 +337,41 @@ async def help(ctx):
         """, inline=True)
 
     await ctx.send(embed=em)
+
+# lists stats from Rheyces Stream
+
+
+@bot.command(name='flostats', help='')
+async def listStreamStats(ctx, *args):
+    # channel check
+    if ctx.channel.id != 246235677983899663 and ctx.channel.id != 809741690054508565:
+        return
+    # new cursor and select stats
+    listStreamStatsCursor = conn.cursor()
+    listStreamStatsCursor.execute("""
+                                    SELECT *
+                                    FROM floStats
+                                    """)
+    # can only be one row
+    rows = listStreamStatsCursor.fetchall()
+
+    # stats
+    streamsAnnounced = rows[0][0]
+    takenPlace = rows[0][1]
+    onlinePercentage = takenPlace / streamsAnnounced
+
+    em = discord.Embed(
+        title="Stream Stats", color=ctx.author.color)
+    # RheycesPog
+    em.set_thumbnail(
+        url="https://static-cdn.jtvnw.net/emoticons/v1/302447893/3.0")
+    em.add_field(name="Angekündigte Streams", value=str(streamsAnnounced))
+    em.add_field(name="Stattgefundene Streams", value=str(takenPlace))
+    em.add_field(name=f"Prozent", value=str(onlinePercentage) + "%")
+    em.set_footer(text="Letzte Prüfung: {}".format(
+        datetime.strftime(lastChecked, '%x - %H:%M:%S')))
+    await ctx.send(embed=em)
+
 
 # list all active nbombs
 
@@ -456,10 +499,6 @@ async def giveNbombRole(ctx, *args):
 
     conn.commit()
 
-
-@bot.command(name='flostats')
-async def giveNbombRole(ctx, *args):
-    print("hi")
 
 # list all single help commands
 
