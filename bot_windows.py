@@ -24,10 +24,6 @@ locale.setlocale(category=locale.LC_ALL,
 conn = sqlite3.connect('NBombs.db', check_same_thread=False)
 nbombCursor = conn.cursor()
 
-# global variables
-lastChecked = datetime.now()
-streamCheckStillRunning = False
-
 # initially creates table
 nbombCursor.execute("""CREATE TABLE IF NOT EXISTS nbombs(
     name text, time timestamp)""")
@@ -54,6 +50,10 @@ intents = discord.Intents().all()
 bot = commands.Bot(command_prefix='!', intents=intents)
 bot.remove_command("help")
 
+# global variables
+lastChecked = datetime.now()
+streamCheckStillRunning = False
+guild = None
 
 # checks if Rheyces stream is online 15 min after it was schedule to be online
 # if its online takenPlace is set to 1 otherwise to 2
@@ -204,14 +204,17 @@ async def checkNbombs():
     # querying nbombs
     checkNBombCursor.execute('SELECT * FROM nbombs')
     rows = checkNBombCursor.fetchall()
-    # getting time and guild
+    # getting time
     now = datetime.now()
-    guild = discord.utils.get(bot.guilds, name=GUILD)
     role = discord.utils.get(guild.roles, name="🆖💣")
     for a in rows:
         if datetime.strptime(a[1], "%x - %H:%M:%S") < now:
             member = discord.utils.get(guild.members, name=a[0])
             await member.remove_roles(role)
+            # send message in #kuschelkrabbe
+            channel = discord.utils.get(guild.channels, id=246235677983899663)
+            await channel.send(
+                content="<@!{}> wurde die N-Bombe weggenommen.".format(member.id))
             deleteEntryFromDB(member.name)
     conn.commit()
     checkNBombCursor.close()
@@ -296,6 +299,8 @@ def checkIfNBombIsAlreadyAssigned(guild, nbomb):
 
 @bot.event
 async def on_ready():
+    global guild
+    guild = discord.utils.get(bot.guilds, name=GUILD)
     await isItTime()
 
 # help command
@@ -303,19 +308,24 @@ async def on_ready():
 
 @bot.group(invoke_without_command=True)
 async def help(ctx):
+    # channel check
+    if ctx.channel.id != 246235677983899663 and ctx.channel.id != 809741690054508565:
+        return
+
     # create and fill embedded message
-    em = discord.Embed(
-        title="Commands", color=ctx.author.color)
+    em = discord.Embed(color=ctx.author.color)
 
     em.add_field(name="Commands", value="""
         !help
         !nbombe [@Person] [Tage]
-        !nbomben""")
+        !nbomben
+        !flostats""")
     em.add_field(
         name="Syntax", value="""
         Zeigt eine Liste aller Commands.
         Weist der Person für [Tage] die N-Bombe zu.
         Zeigt eine Liste aller aktiven N-Bomben.
+        Gibt Auskunft über die Zuverlässigkeit, was Flos Aussagen zu zukünftigen Streams angeht.
         """, inline=True)
 
     await ctx.send(embed=em)
@@ -325,6 +335,10 @@ async def help(ctx):
 
 @bot.command(name='nbomben', help='Zeigt eine Liste aller NBomben an.')
 async def listNbombs(ctx, *args):
+    # channel check
+    if ctx.channel.id != 246235677983899663 and ctx.channel.id != 809741690054508565:
+        return
+
     listNbombCursor = conn.cursor()
     # main()
     # fetch all entries
@@ -374,6 +388,10 @@ async def listNbombs(ctx, *args):
 
 @bot.command(name='nbombe', help='[Name] [Tage] weist dieser Person [Tage] die NBombe zu.')
 async def giveNbombRole(ctx, *args):
+    # channel check
+    if ctx.channel.id != 246235677983899663 and ctx.channel.id != 809741690054508565:
+        return
+
     # check if correct amount of args were used
     if len(args) != 2:
         response = 'Benutze !nbombe [@Name] [Tage] um die N-Bombe zuzuweisen.'
@@ -381,7 +399,6 @@ async def giveNbombRole(ctx, *args):
         return
 
     # getting guild and role object
-    guild = ctx.guild
     role = discord.utils.get(guild.roles, name="🆖💣")
 
     # check if roles on server represent entries in db, if someone on the server manually deleted the role than the data is not consistent
@@ -438,6 +455,11 @@ async def giveNbombRole(ctx, *args):
     # print(rows)
 
     conn.commit()
+
+
+@bot.command(name='flostats')
+async def giveNbombRole(ctx, *args):
+    print("hi")
 
 # list all single help commands
 
