@@ -149,26 +149,26 @@ async def checkStreamLive():
                         checkStreamCursor.execute("""
                                                 UPDATE floStreamSchedule
                                                 SET takenPlace = 1, startedLate = 1, endedEarly = 0
-                                                WHERE scheduledEndtTime = ?
+                                                WHERE scheduledEndTime = ?
                                                 """, [stream[1]])
                     else:
                         checkStreamCursor.execute("""
                                                 UPDATE floStreamSchedule
                                                 SET takenPlace = 1, startedLate = 0, endedEarly = 0
-                                                WHERE scheduledEndtTime = ?
+                                                WHERE scheduledEndTime = ?
                                                 """, [stream[1]])
                 else:
                     if stream[2] == 1:
                         checkStreamCursor.execute("""
                                                 UPDATE floStreamSchedule
                                                 SET endedEarly = 1
-                                                WHERE scheduledEndtTime = ?
+                                                WHERE scheduledEndTime = ?
                                                 """, [stream[1]])
                     else:
                         checkStreamCursor.execute("""
                                                 UPDATE floStreamSchedule
                                                 SET endedEarly = 0
-                                                WHERE scheduledEndtTime = ?
+                                                WHERE scheduledEndTime = ?
                                                 """, [stream[1]])
                 break
     # close cursor and set boolean to false
