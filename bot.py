@@ -1,16 +1,17 @@
-import os
-import discord
-import sqlite3
-import locale
-import threading
 import asyncio
+import discord
+import itertools
+import locale
+import logging
+import os
+import platform
+import sqlite3
+import threading
 import time
 import twitch
-import platform
-import itertools
 
-from dateutil import tz
 from datetime import datetime, timedelta
+from dateutil import tz
 from discord.ext import commands
 from dotenv import load_dotenv
 from stream_check import getSchedule
@@ -60,6 +61,15 @@ intents = discord.Intents().all()
 bot = commands.Bot(command_prefix='!', intents=intents)
 bot.remove_command("help")
 
+# initialise logger
+LOG_FILENAME = "log.log"
+mylogger = logging.getLogger("mylogger")
+streamHandler = logging.StreamHandler()
+fileHandler = logging.FileHandler(LOG_FILENAME)
+mylogger.addHandler(streamHandler)
+mylogger.addHandler(fileHandler)
+mylogger.setLevel(logging.INFO)
+
 # global variables
 lastChecked = datetime.now()
 streamCheckStillRunning = False
@@ -77,7 +87,6 @@ else:
 
 # checks if Rheyces stream is online 15 min after it was schedule to be online
 # if its online takenPlace is set to 1 otherwise to 2
-
 
 async def checkStreamLive():
     # set boolean to true as this function starts waiting
@@ -407,6 +416,11 @@ async def listNbombs(ctx, *args):
     if ctx.channel.id != PRIMARY_CHANNEL and ctx.channel.id != SECONDARY_CHANNEL:
         return
 
+    # log who wrote it when
+    now = datetime.now()
+    mylogger.info(str(now) + " - " + ctx.message.author.name +
+                  ": " + ctx.message.content)
+
     listNbombCursor = conn.cursor()
     # main()
     # fetch all entries
@@ -465,6 +479,11 @@ async def giveNbombRole(ctx, *args):
     # channel check
     if ctx.channel.id != PRIMARY_CHANNEL and ctx.channel.id != SECONDARY_CHANNEL:
         return
+
+    # log who wrote it when
+    now = datetime.now()
+    mylogger.info(str(now) + " - " + ctx.message.author.name +
+                  ": " + ctx.message.content)
 
     # check if correct amount of args were used
     if len(args) != 2:
