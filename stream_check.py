@@ -117,6 +117,7 @@ async def checkStreamLive():
                                                 SET takenPlace = 1, startedLate = 0
                                                 WHERE scheduledStartTime = ?
                                                 """, [stream[0]])
+                    print("Stream ist rechtzeitig live.")
                 else:
                     # set takenPlace to 2 if stream offline
                     checkStreamCursor.execute("""
@@ -144,12 +145,14 @@ async def checkStreamLive():
                                                 SET takenPlace = 1, startedLate = 1, endedEarly = 0
                                                 WHERE scheduledEndTime = ?
                                                 """, [stream[1]])
+                        print("Stream ist zu spät gestartet.")
                     else:
                         checkStreamCursor.execute("""
                                                 UPDATE floStreamSchedule
                                                 SET takenPlace = 1, startedLate = 0, endedEarly = 0
                                                 WHERE scheduledEndTime = ?
                                                 """, [stream[1]])
+                        print("Stream ist rechtzeitig zuende.")
                 else:
                     if stream[2] == 1:
                         checkStreamCursor.execute("""
@@ -157,12 +160,14 @@ async def checkStreamLive():
                                                 SET endedEarly = 1
                                                 WHERE scheduledEndTime = ?
                                                 """, [stream[1]])
+                        print("Stream ist zu früh vorbei.")
                     else:
                         checkStreamCursor.execute("""
                                                 UPDATE floStreamSchedule
                                                 SET endedEarly = 0
                                                 WHERE scheduledEndTime = ?
                                                 """, [stream[1]])
+                        print("Stream ist ausgefallen.")
                 break
     # close cursor and set boolean to false
     conn.commit()
