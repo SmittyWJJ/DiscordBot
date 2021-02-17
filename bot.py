@@ -6,6 +6,7 @@ import logging
 import os
 import platform
 import sqlite3
+import stream_check
 import threading
 import time
 import twitch
@@ -14,7 +15,6 @@ from datetime import datetime, timedelta
 from dateutil import tz
 from discord.ext import commands
 from dotenv import load_dotenv
-from stream_check import getSchedule
 
 # from .core import Group, Command
 
@@ -49,8 +49,8 @@ load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 GUILD = os.getenv('DISCORD_GUILD')
 GUILD_TEST = os.getenv("DISCORD_GUILD_TEST")
-TWITCH_CLIENT_ID = os.getenv("TWITCH_CLIENT_ID")
-TWITCH_CLIENT_SECRET = os.getenv("TWITCH_CLIENT_SECRET")
+# TWITCH_CLIENT_ID = os.getenv("TWITCH_CLIENT_ID")
+# TWITCH_CLIENT_SECRET = os.getenv("TWITCH_CLIENT_SECRET")
 PRIMARY_CHANNEL = int(os.getenv("PRIMARY_CHANNEL"))
 SECONDARY_CHANNEL = int(os.getenv("SECONDARY_CHANNEL"))
 
@@ -83,143 +83,6 @@ if systemOS == "Windows":
 else:
     locale.setlocale(category=locale.LC_ALL,
                      locale="de_DE.utf8")
-
-
-# checks if Rheyces stream is online 15 min after it was schedule to be online
-# if its online takenPlace is set to 1 otherwise to 2
-
-async def checkStreamLive():
-    # set boolean to true as this function starts waiting
-    global streamCheckStillRunning
-    streamCheckStillRunning = True
-
-    # new cursor and select all streams
-    checkStreamCursor = conn.cursor()
-    checkStreamCursor.execute("""
-                        SELECT scheduledStartTime, scheduledEndTime, takenPlace
-                        FROM floStreamSchedule
-                        WHERE startedLate IS NULL
-                        OR endedEarly IS NULL
-                        """)
-    rows = checkStreamCursor.fetchall()
-
-    now = datetime.now()
-    # iterate over all streams and look if any of them should be live now
-    for stream in rows:
-        # checking if we are less than 15 minutes away
-        # then wait until we are 15min behind the supposed stream start and check if the stream is running
-        if stream[0]:
-            minutes_diff = (now - (datetime.strptime(
-                stream[0], "%x - %H:%M:%S"))).total_seconds() / 60.0
-
-            if minutes_diff < 15.0 and minutes_diff > 0.0:
-                # wait until 15min after stream start
-                await asyncio.sleep(int((15 - minutes_diff) * 60))
-                # twitch api check if Rheyces live
-                helix = twitch.Helix(TWITCH_CLIENT_ID, TWITCH_CLIENT_SECRET)
-                if helix.user("Rheyces").is_live:
-                    # set the tags according to what we know so far
-                    checkStreamCursor.execute("""
-                                                UPDATE floStreamSchedule
-                                                SET takenPlace = 1, startedLate = 0
-                                                WHERE scheduledStartTime = ?
-                                                """, [stream[0]])
-                else:
-                    # set takenPlace to 2 if stream offline
-                    checkStreamCursor.execute("""
-                                                UPDATE floStreamSchedule
-                                                SET takenPlace = 2, startedLate = 0
-                                                WHERE scheduledStartTime = ?
-                                                """, [stream[0]])
-                break
-        # checking if we are less than 30 and more than 15 minutes away from the stream end
-        # then wait until exactly 15 min to check if stream is still running
-        if stream[1]:
-            minutes_diff = ((datetime.strptime(
-                stream[0], "%x - %H:%M:%S")) - now).total_seconds() / 60.0
-
-            if minutes_diff < 30.0 and minutes_diff > 15.0:
-                # wait until 15min before stream end
-                await asyncio.sleep(int((minutes_diff-15) * 60))
-                # twitch api check if Rheyces live
-                helix = twitch.Helix(TWITCH_CLIENT_ID, TWITCH_CLIENT_SECRET)
-                if helix.user("Rheyces").is_live:
-                    # set the tags according to the knowledge earned in the end
-                    if stream[2] == 2:
-                        checkStreamCursor.execute("""
-                                                UPDATE floStreamSchedule
-                                                SET takenPlace = 1, startedLate = 1, endedEarly = 0
-                                                WHERE scheduledEndTime = ?
-                                                """, [stream[1]])
-                    else:
-                        checkStreamCursor.execute("""
-                                                UPDATE floStreamSchedule
-                                                SET takenPlace = 1, startedLate = 0, endedEarly = 0
-                                                WHERE scheduledEndTime = ?
-                                                """, [stream[1]])
-                else:
-                    if stream[2] == 1:
-                        checkStreamCursor.execute("""
-                                                UPDATE floStreamSchedule
-                                                SET endedEarly = 1
-                                                WHERE scheduledEndTime = ?
-                                                """, [stream[1]])
-                    else:
-                        checkStreamCursor.execute("""
-                                                UPDATE floStreamSchedule
-                                                SET endedEarly = 0
-                                                WHERE scheduledEndTime = ?
-                                                """, [stream[1]])
-                break
-    # close cursor and set boolean to false
-    conn.commit()
-    checkStreamCursor.close()
-    streamCheckStillRunning = False
-
-# checks the public google calendar for the next 10 upcoming events in this case Rheyces streams
-
-
-async def checkSchedule():
-    checkScheduleCursor = conn.cursor()
-    startStreams = list()
-    endStreams = list()
-    events = getSchedule()
-
-    # return if there are no scheduled events
-    if not events:
-        return
-    # get every event start and end time
-    for event in events:
-        start = event['start'].get('dateTime', event['start'].get('date'))
-        end = event['end'].get('dateTime', event['end'].get('date'))
-        # convert both time formats
-        scheduledStart = datetime.strptime(start, "%Y-%m-%dT%H:%M:%S%z")
-        scheduledStartLocal = datetime.strftime(
-            scheduledStart, "%x - %H:%M:%S")
-        startStreams.append(scheduledStartLocal)
-        scheduledEnd = datetime.strptime(end, "%Y-%m-%dT%H:%M:%S%z")
-        scheduledEndLocal = datetime.strftime(
-            scheduledEnd, "%x - %H:%M:%S")
-        endStreams.append(scheduledEndLocal)
-
-        # insert the stream if the exact same stream doesn't exist
-        for (start, end) in zip(startStreams, endStreams):
-            checkScheduleCursor.execute("""
-                                INSERT INTO floStreamSchedule
-                                (scheduledStartTime, scheduledEndTime, takenPlace)
-                                    SELECT ?, ?, 0
-                                    WHERE NOT EXISTS(
-                                        SELECT *
-                                        FROM floStreamSchedule
-                                        WHERE scheduledStartTime = ?
-                                        AND scheduledEndTime = ?
-                                    )
-                                """, (start, end, start, end))
-
-    # commit
-    conn.commit()
-
-    checkScheduleCursor.close()
 
 
 # checks if its time to remove the nbomb
@@ -255,14 +118,17 @@ async def checkNbombs():
 
 async def isItTime():
     while True:
+        global streamCheckStillRunning
         # check if nbombs need to be removed
         await checkNbombs()
         # check for new entry in Rheyces stream schedule
-        await checkSchedule()
+        await stream_check.checkSchedule()
         # check if a stream is live, if the function is not already waiting
         # because this function starts running 15 min after stream start but gets called every 10 min
         if not streamCheckStillRunning:
-            await checkStreamLive()
+            streamCheckStillRunning = True
+            await stream_check.checkStreamLive()
+            streamCheckStillRunning = False
         # timer which repeats this function every 10 mins
         await asyncio.sleep(600)
 
@@ -518,6 +384,10 @@ async def giveNbombRole(ctx, *args):
            WHERE name = ?
        """, [userToAssignNbomb.name])
     rows = nbombCursor.fetchall()
+
+    # return if we are on test server
+    if guild.name == GUILD_TEST:
+        return
 
     # if nothing was found then make new entry
     # else increase time by daysToAssign days
