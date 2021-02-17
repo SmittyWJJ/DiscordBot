@@ -217,16 +217,36 @@ async def help(ctx):
         !help
         !nbombe [@Person] [Tage]
         !nbomben
-        !flostats""")
+        !flostats
+        !streams""")
     em.add_field(
         name="Syntax", value="""
         Zeigt eine Liste aller Commands.
         Weist der Person für [Tage] die N-Bombe zu.
         Zeigt eine Liste aller aktiven N-Bomben.
         Gibt Auskunft über die Zuverlässigkeit, was Flos Aussagen zu zukünftigen Streams angeht.
+        Zeigt die kommenden Streams an.
         """, inline=True)
 
     await ctx.send(embed=em)
+
+
+# # list all active nbombs
+
+
+# @bot.command(name='streams', help='')
+# async def listStreams(ctx, *args):
+#     # channel check
+#     if ctx.channel.id != PRIMARY_CHANNEL and ctx.channel.id != SECONDARY_CHANNEL:
+#         return
+
+#     # log who wrote it when
+#     now = datetime.now()
+#     mylogger.info(str(now) + " - " + ctx.message.author.name +
+#                   ": " + ctx.message.content)
+
+#     streams = stream_check.getSchedule()
+
 
 # lists stats from Rheyces Stream
 
@@ -398,6 +418,7 @@ async def giveNbombRole(ctx, *args):
     if daysToAssign == 0:
         response = '0 ist keine valide Zeit.'
         await ctx.send(response)
+        return
 
     # stripping symbols of @Role
     userToAssignNbombId = args[0].strip("<@!>")
