@@ -394,6 +394,11 @@ async def giveNbombRole(ctx, *args):
 
     # assign days to a variable
     daysToAssign = int(args[1])
+
+    if daysToAssign == 0:
+        response = '0 ist keine valide Zeit.'
+        await ctx.send(response)
+
     # stripping symbols of @Role
     userToAssignNbombId = args[0].strip("<@!>")
 
@@ -439,8 +444,12 @@ async def giveNbombRole(ctx, *args):
         time = datetime.strftime(time, '%x - %H:%M:%S')
         updateDB(time, userToAssignNbomb.name)
         # sending response to assigning role
-        response = 'Die N-Bombe von {} wurde bis zum {} verlängert. <:x0r6ztGiggle4:785884713306816562>'.format(
-            args[0], time)
+        if daysToAssign > 0:
+            response = 'Die N-Bombe von {} wurde bis zum {} verlängert. <:x0r6ztGiggle4:785884713306816562>'.format(
+                args[0], time)
+        else:
+            response = 'Die N-Bombe von {} wurde bis zum {} verkürzt. <:EZ:754793307418132491>'.format(
+                args[0], time)
         await ctx.send(response)
 
     # for rows in nbombCursor.execute('SELECT * FROM nbombs'):
