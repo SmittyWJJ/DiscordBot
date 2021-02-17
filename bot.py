@@ -89,6 +89,11 @@ else:
 
 
 async def checkNbombs():
+
+    # check if roles on server represent entries in db, if someone on the server manually deleted the role than the data is not consistent
+    # and the role gets deleted from db
+    checkIfNBombIsAlreadyAssigned()
+
     # creating cursor
     checkNBombCursor = conn.cursor()
     # querying nbombs
@@ -172,7 +177,7 @@ def deleteEntryFromDB(member):
 # not sure how costly this is to performance could be left out
 
 
-def checkIfNBombIsAlreadyAssigned(guild, nbomb):
+def checkIfNBombIsAlreadyAssigned():
     nbombCursor.execute('SELECT name FROM nbombs')
     rows = nbombCursor.fetchall()
     for element in rows:
@@ -182,7 +187,7 @@ def checkIfNBombIsAlreadyAssigned(guild, nbomb):
                 return
             deleteEntryFromDB(element[0])
             continue
-        role = discord.utils.get(member.roles, name=nbomb.name)
+        role = discord.utils.get(member.roles, name="🆖💣")
         if role == None:
             deleteEntryFromDB(member.name)
 
@@ -359,9 +364,6 @@ async def giveNbombRole(ctx, *args):
 
     # getting guild and role object
     role = discord.utils.get(guild.roles, name="🆖💣")
-
-    # check if roles on server represent entries in db, if someone on the server manually deleted the role than the data is not consistent
-    checkIfNBombIsAlreadyAssigned(guild, role)
 
     # assign days to a variable
     daysToAssign = int(args[1])
