@@ -129,7 +129,7 @@ async def checkStreamLive():
         # then wait until exactly 15 min to check if stream is still running
         if stream[1]:
             minutes_diff = ((datetime.strptime(
-                stream[0], "%x - %H:%M:%S")) - now).total_seconds() / 60.0
+                stream[1], "%x - %H:%M:%S")) - now).total_seconds() / 60.0
 
             if minutes_diff < 30.0 and minutes_diff > 15.0:
                 # wait until 15min before stream end
