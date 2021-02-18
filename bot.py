@@ -40,8 +40,9 @@ nbombCursor.execute("""CREATE TABLE IF NOT EXISTS nbombs(
 # endedEarly            -   Was the stream online 15 min after the start but offline 15 min before the end?
 #                       -       0 -> no
 #                       -       1 -> yes
+# duration              -   How long is the stream?
 nbombCursor.execute("""CREATE TABLE IF NOT EXISTS floStreamSchedule(
-    scheduledStartTime NUMERIC, scheduledEndTime NUMERIC, takenPlace NUMERIC, startedLate NUMERIC, endedEarly NUMERIC)""")
+    scheduledStartTime NUMERIC, scheduledEndTime NUMERIC, takenPlace NUMERIC, startedLate NUMERIC, endedEarly NUMERIC, duration NUMERIC)""")
 
 
 # loading environmental variables

@@ -198,20 +198,20 @@ async def checkSchedule():
         scheduledEndLocal = datetime.strftime(
             scheduledEnd, "%x - %H:%M:%S")
         endStreams.append(scheduledEndLocal)
-
+        duration = str(scheduledEnd-scheduledStart)
         # insert the stream if the exact same stream doesn't exist
         for (start, end) in zip(startStreams, endStreams):
             checkScheduleCursor.execute("""
                                 INSERT INTO floStreamSchedule
-                                (scheduledStartTime, scheduledEndTime, takenPlace)
-                                    SELECT ?, ?, 0
+                                (scheduledStartTime, scheduledEndTime, takenPlace, duration)
+                                    SELECT ?, ?, 0, ?
                                     WHERE NOT EXISTS(
                                         SELECT *
                                         FROM floStreamSchedule
                                         WHERE scheduledStartTime = ?
                                         AND scheduledEndTime = ?
                                     )
-                                """, (start, end, start, end))
+                                """, (start, end, duration, start, end))
 
     # commit
     conn.commit()
