@@ -313,12 +313,16 @@ async def listStreamStats(ctx, *args):
                                     WHERE takenPlace = 1
                                     """)
     lastStreamTakenPlace = listStreamStatsCursor.fetchall()
+    lastStreamIndex = len(lastStreamTakenPlace)-1
     if lastStreamTakenPlace:
-        lastStreamTakenPlaceDate = (lastStreamTakenPlace[0][0])[0:10]
-        lastStreamTakenPlaceHour = (lastStreamTakenPlace[0][0])[13:18]
-        lastStreamTakenPlaceStartedLate = lastStreamTakenPlace[0][3]
-        lastStreamTakenPlaceEndedEarly = lastStreamTakenPlace[0][4]
-        lastStreamTakenPlaceDuration = (lastStreamTakenPlace[0][5]).split(":")
+        lastStreamTakenPlaceDate = (
+            lastStreamTakenPlace[lastStreamIndex][0])[0:10]
+        lastStreamTakenPlaceHour = (
+            lastStreamTakenPlace[lastStreamIndex][0])[13:18]
+        lastStreamTakenPlaceStartedLate = lastStreamTakenPlace[lastStreamIndex][3]
+        lastStreamTakenPlaceEndedEarly = lastStreamTakenPlace[lastStreamIndex][4]
+        lastStreamTakenPlaceDuration = (
+            lastStreamTakenPlace[lastStreamIndex][5]).split(":")
 
     # date of the last stream that was cancelled
     listStreamStatsCursor.execute("""
