@@ -306,6 +306,48 @@ async def listStreamStats(ctx, *args):
                                     """)
     endedEarly = listStreamStatsCursor.fetchall()[0][0]
 
+    # date of the last stream thats taken place
+    listStreamStatsCursor.execute("""
+                                    SELECT *
+                                    FROM floStreamSchedule
+                                    WHERE takenPlace = 1
+                                    """)
+    lastStreamTakenPlace = listStreamStatsCursor.fetchall()
+    if lastStreamTakenPlace:
+        lastStreamTakenPlaceDate = (lastStreamTakenPlace[0][0])[0:10]
+        lastStreamTakenPlaceHour = (lastStreamTakenPlace[0][0])[13:18]
+        lastStreamTakenPlaceStartedLate = lastStreamTakenPlace[0][3]
+        lastStreamTakenPlaceEndedEarly = lastStreamTakenPlace[0][4]
+        lastStreamTakenPlaceDuration = (lastStreamTakenPlace[0][5]).split(":")
+
+    # date of the last stream that was cancelled
+    listStreamStatsCursor.execute("""
+                                    SELECT *
+                                    FROM floStreamSchedule
+                                    WHERE takenPlace = 0
+                                    AND startedLate = 0
+                                    AND endedEarly = 0
+                                    """)
+    lastStreamCancelled = listStreamStatsCursor.fetchall()
+    if lastStreamCancelled:
+        lastStreamCancelledDate = (lastStreamCancelled[0][0])[0:10]
+        lastStreamCancelledStartHour = (lastStreamCancelled[0][0])[13:18]
+        lastStreamCancelledEndHour = (lastStreamCancelled[0][1])[13:18]
+
+    # date of the next stream
+    listStreamStatsCursor.execute("""
+                                    SELECT *
+                                    FROM floStreamSchedule
+                                    WHERE takenPlace = 0
+                                    AND startedLate IS NULL
+                                    AND endedEarly IS NULL
+                                    """)
+    nextStream = listStreamStatsCursor.fetchall()
+    if nextStream:
+        nextStreamDate = (nextStream[0][0])[0:10]
+        nextStreamStartHour = (nextStream[0][0])[13:18]
+        nextStreamEndHour = (nextStream[0][1])[13:18]
+
     # stats
     onlinePercentage = (takenPlace / takenPlaceOrCancelled) * 100
 
@@ -321,6 +363,45 @@ async def listStreamStats(ctx, *args):
     em.add_field(name="Zu früh beendet", value=str(endedEarly))
     em.add_field(name="Zuverlässigkeit",
                  value=str(onlinePercentage) + "%")
+    # descision tree for what to write for the last stream
+    # there is no last stream
+    if not lastStreamTakenPlace:
+        em.add_field(name="Letzter Stream", inline=False,
+                     value="Es gab noch keinen Stream.")
+    # last stream started late
+    elif lastStreamTakenPlaceStartedLate == 1:
+        em.add_field(name="Letzter Stream", inline=False,
+                     value="Der letzte Stream war am **{}** um **{}** Uhr und sollte **{}:{}** Stunden gehen. Jedoch wurde der Stream zu spät gestartet. <:weirdChamp:754793653318320298>".format(lastStreamTakenPlaceDate, lastStreamTakenPlaceHour, lastStreamTakenPlaceDuration[0], lastStreamTakenPlaceDuration[1]))
+    # last stream ended early
+    elif lastStreamTakenPlaceEndedEarly == 1:
+        em.add_field(name="Letzter Stream", inline=False,
+                     value="Der letzte Stream war am **{}** um **{}** Uhr und sollte **{}:{}** Stunden gehen. Jedoch wurde der Stream zu spät gestartet. <:weirdChamp:754793653318320298>".format(lastStreamTakenPlaceDate, lastStreamTakenPlaceHour, lastStreamTakenPlaceDuration[0], lastStreamTakenPlaceDuration[1]))
+    # last stream had no issues
+    else:
+        em.add_field(name="Letzter Stream", inline=False,
+                     value="Der letzte Stream war am **{}** um **{}** Uhr und ging **{}:{}** Stunden.".format(lastStreamTakenPlaceDate, lastStreamTakenPlaceHour, lastStreamTakenPlaceDuration[0], lastStreamTakenPlaceDuration[1]))
+
+    # descision tree for what to write for the last cancelled stream
+    # no stream cancelled yet
+    if not lastStreamCancelled:
+        em.add_field(name="Letzter ausgefallener Stream", inline=False,
+                     value="Es ist noch kein Stream ausgefallen. <:FeelsGoodMan:327518256254418954>")
+    # last stream cancelled
+    else:
+        em.add_field(name="Letzter ausgefallener Stream", inline=False,
+                     value="Der letzte Stream sollte am **{}** von **{}** Uhr bis **{}** Uhr stattfinden. Leider war das nicht der Fall. <:FeelsWeird:754793366440640582>".format(lastStreamCancelledDate, lastStreamCancelledStartHour, lastStreamCancelledEndHour))
+
+    # descision tree for what to write for the next stream
+    if not nextStream:
+        em.add_field(name="Nächster Stream", inline=False,
+                     value="Es ist noch kein nächster Stream geplant.")
+    else:
+        timeUntilNextStream = datetime.strptime(
+            nextStream[0][0], '%x - %H:%M:%S') - datetime.now()
+        hoursLeft = timeUntilNextStream.seconds/3600
+        em.add_field(name="Nächster Stream", inline=False,
+                     value="Der nächste Steam ist am **{}** von **{}** Uhr bis **{}** Uhr geplant. Also noch {} Tage, {} Stunden und {} Minuten warten.".format(nextStreamDate, nextStreamStartHour, nextStreamEndHour, str(timeUntilNextStream.days), int(hoursLeft),  int((hoursLeft-int(hoursLeft))*60)))
+
     em.set_footer(text="Letzte Prüfung: {}".format(
         datetime.strftime(lastChecked, '%x - %H:%M:%S')))
     await ctx.send(embed=em)
