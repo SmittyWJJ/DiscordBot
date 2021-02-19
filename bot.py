@@ -375,7 +375,7 @@ async def listStreamStats(ctx, *args):
     # last stream ended early
     elif lastStreamTakenPlaceEndedEarly == 1:
         em.add_field(name="Letzter Stream", inline=False,
-                     value="Der letzte Stream war am **{}** um **{}** Uhr und sollte **{}:{}** Stunden gehen. Jedoch wurde der Stream zu spät gestartet. <:weirdChamp:754793653318320298>".format(lastStreamTakenPlaceDate, lastStreamTakenPlaceHour, lastStreamTakenPlaceDuration[0], lastStreamTakenPlaceDuration[1]))
+                     value="Der letzte Stream war am **{}** um **{}** Uhr und sollte **{}:{}** Stunden gehen. Jedoch wurde der Stream zu früh beendet. <:weirdChamp:754793653318320298>".format(lastStreamTakenPlaceDate, lastStreamTakenPlaceHour, lastStreamTakenPlaceDuration[0], lastStreamTakenPlaceDuration[1]))
     # last stream had no issues
     else:
         em.add_field(name="Letzter Stream", inline=False,
