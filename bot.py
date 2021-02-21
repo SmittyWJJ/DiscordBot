@@ -404,7 +404,7 @@ async def listStreamStats(ctx, *args):
             nextStream[0][0], '%x - %H:%M:%S') - datetime.now()
         if timeUntilNextStream.days < 0:
             em.add_field(name="Nächster Stream", inline=False,
-                         value="Es ist noch kein nächster Stream angekündigt. <:FeelsBadMan:327518231105503243> ")
+                         value="Es ist noch kein nächster Stream angekündigt. <:FeelsBadMan:327518231105503243>")
         else:
             hoursLeft = timeUntilNextStream.seconds/3600
             em.add_field(name="Nächster Stream", inline=False,
