@@ -402,9 +402,13 @@ async def listStreamStats(ctx, *args):
     else:
         timeUntilNextStream = datetime.strptime(
             nextStream[0][0], '%x - %H:%M:%S') - datetime.now()
-        hoursLeft = timeUntilNextStream.seconds/3600
-        em.add_field(name="Nächster Stream", inline=False,
-                     value="Der nächste Steam ist am **{}** von **{}** Uhr bis **{}** Uhr geplant. Also noch {} Tage, {} Stunden und {} Minuten warten.".format(nextStreamDate, nextStreamStartHour, nextStreamEndHour, str(timeUntilNextStream.days), int(hoursLeft),  int((hoursLeft-int(hoursLeft))*60)))
+        if timeUntilNextStream.days < 0:
+            em.add_field(name="Nächster Stream", inline=False,
+                         value="Es ist noch kein nächster Stream angekündigt. <:FeelsBadMan:327518231105503243> ")
+        else:
+            hoursLeft = timeUntilNextStream.seconds/3600
+            em.add_field(name="Nächster Stream", inline=False,
+                         value="Der nächste Steam ist am **{}** von **{}** Uhr bis **{}** Uhr geplant. Also noch {} Tage, {} Stunden und {} Minuten warten.".format(nextStreamDate, nextStreamStartHour, nextStreamEndHour, str(timeUntilNextStream.days), int(hoursLeft),  int((hoursLeft-int(hoursLeft))*60)))
 
     em.set_footer(text="Letzte Prüfung: {}".format(
         datetime.strftime(lastChecked, '%x - %H:%M:%S')))
