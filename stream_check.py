@@ -9,6 +9,10 @@ import sqlite3
 import threading
 import time
 import twitch
+import urllib.request
+import urllib.parse
+import requests
+import json
 from datetime import datetime, timedelta
 from discord.ext import commands
 from dotenv import load_dotenv
@@ -39,6 +43,23 @@ if systemOS == "Windows":
 else:
     locale.setlocale(category=locale.LC_ALL,
                      locale="de_DE.utf8")
+
+# preparation for twitch listener
+
+
+def makeTwitchApiRequest(url):
+    x = requests.post(
+        f"https://id.twitch.tv/oauth2/token?client_id={TWITCH_CLIENT_ID}&client_secret={TWITCH_CLIENT_SECRET}&grant_type=client_credentials")
+    accessToken = json.loads(x.text)["access_token"]
+    header = {"Client-ID": TWITCH_CLIENT_ID,
+              "Authorization": f"Bearer {accessToken}"}
+
+    request = urllib.request.Request(url, headers=header)
+
+    receive = urllib.request.urlopen(request)
+
+    # firstly the data gets transformed from an bytes-like object to an UFT-8-string (json) and afterwards it gets parsed
+    return json.loads(receive.read().decode("utf-8"))
 
 
 def getSchedule():

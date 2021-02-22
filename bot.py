@@ -198,6 +198,10 @@ def checkIfNBombIsAlreadyAssigned():
 @bot.event
 async def on_ready():
     # getting the guild for global use
+
+    # preparation for twitch listener
+    # print(stream_check.makeTwitchApiRequest("https://api.twitch.tv/helix/users?login=rheyces"))
+
     global guild
     guild = discord.utils.get(bot.guilds, name=GUILD)
     await isItTime()
