@@ -362,7 +362,7 @@ async def listStreamStats(ctx, *args):
     if takenPlaceOrCancelled == 0:
         onlinePercentage = 0
     else:
-        onlinePercentage = (takenPlace / takenPlaceOrCancelled) * 100
+        onlinePercentage = round((takenPlace / takenPlaceOrCancelled) * 100)
 
     em = discord.Embed(
         title="Stream Stats", color=ctx.author.color)
