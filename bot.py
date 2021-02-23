@@ -268,6 +268,9 @@ async def listStreamStats(ctx, *args):
     listStreamStatsCursor.execute("""
                                     SELECT count(*)
                                     FROM floStreamSchedule
+                                    WHERE takenPlace = 0
+                                    AND startedLate IS NULL
+                                    AND endedEarly IS NULL
                                     """)
     allAnnounced = listStreamStatsCursor.fetchall()[0][0]
 
@@ -406,7 +409,7 @@ async def listStreamStats(ctx, *args):
     # last stream cancelled
     else:
         em.add_field(name="Letzter ausgefallener Stream", inline=False,
-                     value="Der letzte Stream sollte am **{}** von **{}** Uhr bis **{}** Uhr stattfinden. Leider war das nicht der Fall. <:FeelsWeird:754793366440640582>".format(lastStreamCancelledDate, lastStreamCancelledStartHour, lastStreamCancelledEndHour))
+                     value="Der letzte ausgefallene Stream sollte eigentlich am **{}** von **{}** Uhr bis **{}** Uhr stattfinden. Leider war das nicht der Fall. <:FeelsWeird:754793366440640582>".format(lastStreamCancelledDate, lastStreamCancelledStartHour, lastStreamCancelledEndHour))
 
     # descision tree for what to write for the next stream
     if not nextStream:
