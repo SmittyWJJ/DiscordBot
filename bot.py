@@ -41,8 +41,9 @@ nbombCursor.execute("""CREATE TABLE IF NOT EXISTS nbombs(
 #                       -       0 -> no
 #                       -       1 -> yes
 # duration              -   How long is the stream?
+# streamTopic           -   The description of the calendar entry
 nbombCursor.execute("""CREATE TABLE IF NOT EXISTS floStreamSchedule(
-    scheduledStartTime NUMERIC, scheduledEndTime NUMERIC, takenPlace NUMERIC, startedLate NUMERIC, endedEarly NUMERIC, duration NUMERIC)""")
+    scheduledStartTime NUMERIC, scheduledEndTime NUMERIC, takenPlace NUMERIC, startedLate NUMERIC, endedEarly NUMERIC, duration NUMERIC, streamTopic TEXT)""")
 
 
 # loading environmental variables
@@ -355,9 +356,13 @@ async def listStreamStats(ctx, *args):
         nextStreamDate = (nextStream[0][0])[0:10]
         nextStreamStartHour = (nextStream[0][0])[13:18]
         nextStreamEndHour = (nextStream[0][1])[13:18]
+        nextStreamTopic = nextStream[0][6]
 
     # stats
-    onlinePercentage = (takenPlace / takenPlaceOrCancelled) * 100
+    if takenPlaceOrCancelled == 0:
+        onlinePercentage = 0
+    else:
+        onlinePercentage = (takenPlace / takenPlaceOrCancelled) * 100
 
     em = discord.Embed(
         title="Stream Stats", color=ctx.author.color)
@@ -411,8 +416,12 @@ async def listStreamStats(ctx, *args):
                          value="Es ist noch kein nächster Stream angekündigt. <:FeelsBadMan:327518231105503243>")
         else:
             hoursLeft = timeUntilNextStream.seconds/3600
+            nextStreamFieldString = "Der nächste Steam ist am **{}** von **{}** Uhr bis **{}** Uhr geplant. Also noch {} Tage, {} Stunden und {} Minuten warten.".format(
+                nextStreamDate, nextStreamStartHour, nextStreamEndHour, str(timeUntilNextStream.days), int(hoursLeft),  int((hoursLeft-int(hoursLeft))*60))
+            if nextStreamTopic:
+                nextStreamFieldString += f"\n\nGestreamt wird: **{nextStreamTopic}**"
             em.add_field(name="Nächster Stream", inline=False,
-                         value="Der nächste Steam ist am **{}** von **{}** Uhr bis **{}** Uhr geplant. Also noch {} Tage, {} Stunden und {} Minuten warten.".format(nextStreamDate, nextStreamStartHour, nextStreamEndHour, str(timeUntilNextStream.days), int(hoursLeft),  int((hoursLeft-int(hoursLeft))*60)))
+                         value=nextStreamFieldString)
 
     em.set_footer(text="Letzte Prüfung: {}".format(
         datetime.strftime(lastChecked, '%x - %H:%M:%S')))

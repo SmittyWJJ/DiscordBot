@@ -208,8 +208,10 @@ async def checkSchedule():
         return
     # get every event start and end time
     for event in events:
+        # get event start time, end time and summary
         start = event['start'].get('dateTime', event['start'].get('date'))
         end = event['end'].get('dateTime', event['end'].get('date'))
+        streamTopic = event['summary']    
         # convert both time formats
         scheduledStart = datetime.strptime(start, "%Y-%m-%dT%H:%M:%S%z")
         scheduledStartLocal = datetime.strftime(
@@ -224,15 +226,15 @@ async def checkSchedule():
         for (start, end) in zip(startStreams, endStreams):
             checkScheduleCursor.execute("""
                                 INSERT INTO floStreamSchedule
-                                (scheduledStartTime, scheduledEndTime, takenPlace, duration)
-                                    SELECT ?, ?, 0, ?
+                                (scheduledStartTime, scheduledEndTime, takenPlace, duration, streamTopic)
+                                    SELECT ?, ?, 0, ?, ?
                                     WHERE NOT EXISTS(
                                         SELECT *
                                         FROM floStreamSchedule
                                         WHERE scheduledStartTime = ?
                                         AND scheduledEndTime = ?
                                     )
-                                """, (start, end, duration, start, end))
+                                """, (start, end, duration, streamTopic, start, end))
 
     # commit
     conn.commit()
