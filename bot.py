@@ -333,7 +333,7 @@ async def listStreamStats(ctx, *args):
     listStreamStatsCursor.execute("""
                                     SELECT *
                                     FROM floStreamSchedule
-                                    WHERE takenPlace = 0
+                                    WHERE takenPlace = 2
                                     AND startedLate = 0
                                     AND endedEarly = 0
                                     """)
