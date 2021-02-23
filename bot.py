@@ -338,10 +338,14 @@ async def listStreamStats(ctx, *args):
                                     AND endedEarly = 0
                                     """)
     lastStreamCancelled = listStreamStatsCursor.fetchall()
+    lastStreamCancelledIndex = len(lastStreamCancelled)-1
     if lastStreamCancelled:
-        lastStreamCancelledDate = (lastStreamCancelled[0][0])[0:10]
-        lastStreamCancelledStartHour = (lastStreamCancelled[0][0])[13:18]
-        lastStreamCancelledEndHour = (lastStreamCancelled[0][1])[13:18]
+        lastStreamCancelledDate = (
+            lastStreamCancelled[lastStreamCancelledIndex][0])[0:10]
+        lastStreamCancelledStartHour = (
+            lastStreamCancelled[lastStreamCancelledIndex][0])[13:18]
+        lastStreamCancelledEndHour = (
+            lastStreamCancelled[lastStreamCancelledIndex][1])[13:18]
 
     # date of the next stream
     listStreamStatsCursor.execute("""
