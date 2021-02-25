@@ -257,7 +257,7 @@ async def help(ctx):
 # lists stats from Rheyces Stream
 
 
-@bot.command(name='flostats', help='')
+@bot.command(name='flostats', aliases=['streamstats', 'stats', 'flo', 'Flostats'])
 async def listStreamStats(ctx, *args):
     # channel check
     if ctx.channel.id != PRIMARY_CHANNEL and ctx.channel.id != SECONDARY_CHANNEL:
@@ -438,7 +438,7 @@ async def listStreamStats(ctx, *args):
 # list all active nbombs
 
 
-@bot.command(name='nbomben', help='Zeigt eine Liste aller N-Bomben an.')
+@bot.command(name='nbomben', aliases=['nbonben', 'nbombs', 'bonben', 'Nbomben'])
 async def listNbombs(ctx, *args):
     # channel check
     if ctx.channel.id != PRIMARY_CHANNEL and ctx.channel.id != SECONDARY_CHANNEL:
@@ -502,7 +502,7 @@ async def listNbombs(ctx, *args):
 # assign nbomb
 
 
-@bot.command(name='nbombe', help='[Name] [Tage] weist dieser Person [Tage] die N-Bombe zu.')
+@bot.command(name='nbombe', aliases=['nbomb', 'Nbomb', 'Nbombe'])
 async def giveNbombRole(ctx, *args):
     # channel check
     if ctx.channel.id != PRIMARY_CHANNEL and ctx.channel.id != SECONDARY_CHANNEL:
