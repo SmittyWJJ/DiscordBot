@@ -257,7 +257,7 @@ async def help(ctx):
 # lists stats from Rheyces Stream
 
 
-@bot.command(name='flostats', aliases=['streamstats', 'stats', 'flo', 'Flostats'])
+@bot.command(name='flostats', aliases=['streamstats', 'stats', 'flo', 'Flostats', 'flostream'])
 async def listStreamStats(ctx, *args):
     # channel check
     if ctx.channel.id != PRIMARY_CHANNEL and ctx.channel.id != SECONDARY_CHANNEL:
