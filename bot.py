@@ -465,15 +465,14 @@ async def listNbombs(ctx, *args):
         return
     else:
         nbombs = list()
-        # sort the list by time left if there are more than one
-        if len(rows) > 1:
-            for row in rows:
-                nBombUntil = datetime.strptime(row[1], '%x - %H:%M:%S')
-                now = datetime.now()
-                timeLeft = nBombUntil - now
-                hoursLeft = timeLeft.seconds/3600
-                nbombs.append(
-                    [row[0], row[1], timeLeft.days, int(hoursLeft), int((hoursLeft-int(hoursLeft))*60)])
+        # sort the list by time left
+        for row in rows:
+            nBombUntil = datetime.strptime(row[1], '%x - %H:%M:%S')
+            now = datetime.now()
+            timeLeft = nBombUntil - now
+            hoursLeft = timeLeft.seconds/3600
+            nbombs.append(
+                [row[0], row[1], timeLeft.days, int(hoursLeft), int((hoursLeft-int(hoursLeft))*60)])
             nbombs.sort(key=lambda person: (person[2], person[0]))
 
     # fill the field strings to post them afterwards
